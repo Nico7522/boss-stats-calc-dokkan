@@ -1,0 +1,5 @@
+*.json
+config.py
+packet.py
+req.py
+pysqlsimplecipher

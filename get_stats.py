@@ -1,7 +1,7 @@
 import json
 from pprint import pprint
 import sqlite3
-dbfile = './pysqlsimplecipher/output.db'
+dbfile = './pysqlsimplecipher/db03042025.db'
 
 
 # Calcul les dégâts des attaques spéciales
@@ -54,6 +54,9 @@ def extract_enemies_info(input_file, output_file):
         informations = {
         
         }
+        informations = {
+            "level_id": int(d['sugoroku']['map'].replace('_', ''))
+        }
         while(i < 15):
             if str(i) in d['sugoroku']['events']:
                 if 'content' in d['sugoroku']['events'][str(i)]:
@@ -73,18 +76,36 @@ def extract_enemies_info(input_file, output_file):
 
 # Après avoir extrait les infos, crée un fichier JSON avec toutes les informations nécéssaires sur le niveau donné
 def get_enemies_info(input_file, output_file):
+    con = sqlite3.connect(dbfile)
+
     with open(input_file, 'r') as f:
         data = json.load(f)  
         informations = {}
         fight_number = 1
+    con.row_factory = sqlite3.Row
+    cur = con.cursor()
+    level_info = "SELECT areas.id AS 'area_id', quests.id AS 'level_id', areas.name AS 'area_name', quests.name AS 'level_name' FROM quests JOIN areas ON quests.area_id = areas.id WHERE quests.id = ?"
+    param = (data['level_id'],)  
+    cur.execute(level_info, param)
+    row = cur.fetchone()
+    informations = {
+        "area_id": row['area_id'],
+        "area_name": row['area_name'],
+        "level_id": data['level_id'],
+        "level_name": row['level_name'],
+ 
+    }
     i = 1
+
+
     while(i < 15):
+        bgm_info = {}
+
         if str(i) in data:
             round_number = len(data[str(i)]['battles_infos'])
-   
+
+            j = 0
             for info in data[str(i)]['enemies_infos']:
-                
-                con = sqlite3.connect(dbfile)
                 con.row_factory = sqlite3.Row
                 cur = con.cursor()
                 char_and_special_info = "SELECT cards.name AS 'Nom', cards.lv_max AS 'Niveau Max', cards.element AS 'Type et Classe', special_sets.name AS 'Nom', special_sets.description as 'Description' FROM card_specials JOIN special_sets ON card_specials.special_set_id = special_sets.id JOIN cards ON card_specials.card_id = cards.id WHERE cards.id = ?"
@@ -124,7 +145,6 @@ def get_enemies_info(input_file, output_file):
                             "effect": row['eff_value1']
                         })
 
-                con.close()
                 key = f'fight_{str(fight_number)}'
                 if key not in informations:
                     informations[key] = {'nb_of_round': round_number,'enemies': []}  # Initialisation de la structure
@@ -141,14 +161,18 @@ def get_enemies_info(input_file, output_file):
                         'attack per turn': info[0]["multi_atk_num"],
                         'special_cooldown': cooldown,
                         'special_attack_chance': f"{special_attack_chance}%",
-                        'max_special_per_turn': max_special_per_turn
+                        'max_special_per_turn': max_special_per_turn,
+                        "bgm_id": data[str(i)]['battles_infos'][j]['bgm_id']
                         }
                     )
+                j +=1
             fight_number += 1
             with open(output_file, 'w') as output:
                 json.dump(informations, output, indent = 2)
        
         i +=1
+    con.close()
+
 
 # extract_enemies_info('./raw/enn_surp_lvl_8', 'enn_surp_lvl_8_extracted')
 
